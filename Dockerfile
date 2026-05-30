@@ -1,26 +1,21 @@
-FROM node:20-bookworm
+FROM node:20-slim
 
-# Install minimal OS dependencies for Chromium/Puppeteer
+# Prevent Puppeteer and Playwright from downloading their own browsers during npm install
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# Install system Chromium (automatically pulls all required OS libraries)
 RUN apt-get update && apt-get install -y \
     chromium \
-    libnss3 \
-    libxss1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
-    libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package configuration
+# Copy package configurations
 COPY package*.json ./
 
-# Install JS dependencies
-RUN npm install
-
-# Install Playwright browser and its missing OS dependencies
-RUN npx playwright install --with-deps chromium
+# Install only production dependencies using clean install
+RUN npm ci --only=production
 
 # Copy the rest of the application
 COPY . .

@@ -34,7 +34,10 @@ for (const file of lockFiles) {
     console.log(`Cleaned up leftover Chromium file: ${file}`);
   } catch (err) {
     if (err.code !== "ENOENT") {
-      console.warn(`Could not delete leftover Chromium file ${file}:`, err.message);
+      console.warn(
+        `Could not delete leftover Chromium file ${file}:`,
+        err.message,
+      );
     }
   }
 }
@@ -43,8 +46,9 @@ for (const file of lockFiles) {
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  }
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  },
 });
 
 client.on("qr", (qr) => {
@@ -57,8 +61,8 @@ let isRunning = false;
 
 client.on("ready", () => {
   console.log("WhatsApp Client is ready!");
-  // Start the scraping loop every 1 minute (60000 ms)
-  setInterval(runBots, 1 * 60 * 1000);
+  // Start the scraping loop every 5 minutes (300000 ms)
+  setInterval(runBots, 5 * 60 * 1000);
   // Run immediately on start
   runBots();
 });
@@ -76,7 +80,7 @@ let lastClearedTime = Date.now();
 function saveCache() {
   const payload = {
     lastCleared: lastClearedTime,
-    jobs: Array.from(notifiedJobs)
+    jobs: Array.from(notifiedJobs),
   };
   fs.writeFileSync(CACHE_FILE, JSON.stringify(payload, null, 2));
 }
@@ -85,7 +89,9 @@ function checkAndClearCache() {
   const oneDayMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
   if (now - lastClearedTime >= oneDayMs) {
-    console.log(`\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`);
+    console.log(
+      `\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`,
+    );
     notifiedJobs.clear();
     lastClearedTime = now;
     saveCache();
@@ -120,14 +126,20 @@ loadCache();
 async function runBots() {
   checkAndClearCache();
   if (isRunning) {
-    console.log(`\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`);
+    console.log(
+      `\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`,
+    );
     return;
   }
   isRunning = true;
   console.log(`\n[${new Date().toISOString()}] Running job scrape bots...`);
-  
+
   // Launch browser
-  const browser = await chromium.launch({ headless: true });
+  const launchOptions = { headless: true };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  const browser = await chromium.launch(launchOptions);
 
   try {
     // Reload configs dynamically to pick up any manual changes to config.json
@@ -137,12 +149,15 @@ async function runBots() {
       const parsed = JSON.parse(configData);
       currentConfigs = Array.isArray(parsed) ? parsed : [parsed];
     } catch (err) {
-      console.warn("Could not read config.json during run, using startup config:", err.message);
+      console.warn(
+        "Could not read config.json during run, using startup config:",
+        err.message,
+      );
       currentConfigs = configs;
     }
 
     const page = await browser.newPage();
-    
+
     // Navigate to target URL
     console.log(`-> Navigating to target URL: ${TARGET_URL}`);
     await page.goto(TARGET_URL, { waitUntil: "domcontentloaded" });
@@ -156,15 +171,20 @@ async function runBots() {
       const select = document.querySelector("#regionalSelect");
       if (!select) return [];
       return Array.from(select.options)
-        .map(opt => ({ value: opt.value, text: opt.innerText.trim() }))
-        .filter(opt => opt.value !== ""); // Exclude placeholder option
+        .map((opt) => ({ value: opt.value, text: opt.innerText.trim() }))
+        .filter((opt) => opt.value !== ""); // Exclude placeholder option
     });
 
-    console.log(`   Found ${regions.length} region(s) in dropdown:`, regions.map(r => r.text).join(", "));
+    console.log(
+      `   Found ${regions.length} region(s) in dropdown:`,
+      regions.map((r) => r.text).join(", "),
+    );
 
     for (const region of regions) {
-      console.log(`\n   -> Processing Region: "${region.text}" (ID: ${region.value})`);
-      
+      console.log(
+        `\n   -> Processing Region: "${region.text}" (ID: ${region.value})`,
+      );
+
       try {
         // Select option
         await page.selectOption("#regionalSelect", region.value);
@@ -174,14 +194,21 @@ async function runBots() {
 
         // Wait for empty row to disappear (signaling table populated)
         try {
-          await page.waitForFunction(() => !document.querySelector('.mud-table-empty-row'), { timeout: 6000 });
+          await page.waitForFunction(
+            () => !document.querySelector(".mud-table-empty-row"),
+            { timeout: 6000 },
+          );
         } catch (e) {
-          console.log(`      [Info] Waiting for empty row to disappear timed out. Proceeding...`);
+          console.log(
+            `      [Info] Waiting for empty row to disappear timed out. Proceeding...`,
+          );
         }
 
         // Look for rows that match our criteria
         const rows = await page.$$("tr");
-        console.log(`      Found ${rows.length} rows on the page. Inspecting data...`);
+        console.log(
+          `      Found ${rows.length} rows on the page. Inspecting data...`,
+        );
         let foundJobs = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -205,22 +232,29 @@ async function runBots() {
           const specialtyText = (await especialidadTd.innerText()).trim();
 
           const regionalTd = await row.$('td[data-label="Dirección Regional"]');
-          const regionalText = regionalTd ? (await regionalTd.innerText()).trim() : region.text;
+          const regionalText = regionalTd
+            ? (await regionalTd.innerText()).trim()
+            : region.text;
 
           const clasePuestoTd = await row.$('td[data-label="Clase de Puesto"]');
-          const clasePuestoText = clasePuestoTd ? (await clasePuestoTd.innerText()).trim() : "";
+          const clasePuestoText = clasePuestoTd
+            ? (await clasePuestoTd.innerText()).trim()
+            : "";
 
           // Check if it matches any configuration list
           for (const config of currentConfigs) {
-            const targetSpecs = config.especialidades || (config.filters && config.filters.Especialidad) || [];
+            const targetSpecs =
+              config.especialidades ||
+              (config.filters && config.filters.Especialidad) ||
+              [];
             const targetClases = config.clasesPuesto || [];
-            
-            const matchedSpecialty = targetSpecs.find(spec => 
-              specialtyText.toLowerCase().includes(spec.toLowerCase())
+
+            const matchedSpecialty = targetSpecs.find((spec) =>
+              specialtyText.toLowerCase().includes(spec.toLowerCase()),
             );
 
-            const matchedClase = targetClases.find(clase => 
-              clasePuestoText.toLowerCase().includes(clase.toLowerCase())
+            const matchedClase = targetClases.find((clase) =>
+              clasePuestoText.toLowerCase().includes(clase.toLowerCase()),
             );
 
             const hasSpecMatch = targetSpecs.length > 0 && matchedSpecialty;
@@ -228,7 +262,9 @@ async function runBots() {
 
             if (hasSpecMatch || hasClaseMatch) {
               const vacanteTd = await row.$('td[data-label="Vacante"]');
-              const vacanteId = vacanteTd ? (await vacanteTd.innerText()).trim() : null;
+              const vacanteId = vacanteTd
+                ? (await vacanteTd.innerText()).trim()
+                : null;
               const rowText = await row.innerText();
 
               foundJobs.push({
@@ -237,48 +273,77 @@ async function runBots() {
                 whatsappNumber: config.whatsappNumber,
                 regionalText,
                 specialtyText,
-                clasePuestoText
+                clasePuestoText,
               });
             }
           }
         }
 
         if (foundJobs.length > 0) {
-          console.log(`      Found ${foundJobs.length} matching job(s) in region "${region.text}"!`);
+          console.log(
+            `      Found ${foundJobs.length} matching job(s) in region "${region.text}"!`,
+          );
           for (const job of foundJobs) {
-            const { vacanteId, rowText, whatsappNumber, regionalText, specialtyText, clasePuestoText } = job;
-            const cleanRegion = regionalText.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").trim();
-            const cleanSpecialty = specialtyText.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").trim();
-            const cleanClase = clasePuestoText.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").trim();
-            const cleanVacante = (vacanteId || 'no_id').trim();
+            const {
+              vacanteId,
+              rowText,
+              whatsappNumber,
+              regionalText,
+              specialtyText,
+              clasePuestoText,
+            } = job;
+            const cleanRegion = regionalText
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .trim();
+            const cleanSpecialty = specialtyText
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .trim();
+            const cleanClase = clasePuestoText
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .trim();
+            const cleanVacante = (vacanteId || "no_id").trim();
             const jobId = `vacante-${cleanVacante}-${cleanRegion}-${cleanClase}-${cleanSpecialty}`;
 
             if (!notifiedJobs.has(jobId)) {
               notifiedJobs.add(jobId);
               saveCache();
 
-              const message = `🚨 *¡Nueva Vacante Encontrada!*\n\n` +
-                              `📍 *Región:* ${regionalText}\n` +
-                              `💼 *Clase de Puesto:* ${clasePuestoText || 'N/A'}\n` +
-                              `🎯 *Especialidad:* ${specialtyText || 'N/A'}\n\n` +
-                              `📝 *Detalles:*\n${rowText}\n\n` +
-                              `🔗 *Enlace:* ${TARGET_URL}`;
+              const message =
+                `🚨 *¡Nueva Vacante Encontrada!*\n\n` +
+                `📍 *Región:* ${regionalText}\n` +
+                `💼 *Clase de Puesto:* ${clasePuestoText || "N/A"}\n` +
+                `🎯 *Especialidad:* ${specialtyText || "N/A"}\n\n` +
+                `📝 *Detalles:*\n${rowText}\n\n` +
+                `🔗 *Enlace:* ${TARGET_URL}`;
 
-              console.log(`      Sending WhatsApp message to ${whatsappNumber}...`);
+              console.log(
+                `      Sending WhatsApp message to ${whatsappNumber}...`,
+              );
               try {
                 await client.sendMessage(whatsappNumber, message);
                 console.log(`      Message sent successfully.`);
               } catch (sendErr) {
-                console.error(`      Failed to send message to ${whatsappNumber}:`, sendErr.message);
+                console.error(
+                  `      Failed to send message to ${whatsappNumber}:`,
+                  sendErr.message,
+                );
               }
             }
           }
         } else {
           console.log(`      No new jobs found in region "${region.text}".`);
         }
-
       } catch (regionError) {
-        console.error(`      Error processing region "${region.text}":`, regionError.message);
+        console.error(
+          `      Error processing region "${region.text}":`,
+          regionError.message,
+        );
       }
     }
 
