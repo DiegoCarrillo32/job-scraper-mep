@@ -159,7 +159,14 @@ async function runBots() {
       currentConfigs = configs;
     }
 
-    const page = await browser.newPage();
+    const context = await browser.newContext({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+      extraHTTPHeaders: {
+        "Accept-Language": "es-CR,es;q=0.9,en;q=0.8",
+      },
+    });
+    const page = await context.newPage();
 
     // Navigate to target URL
     console.log(`-> Navigating to target URL: ${TARGET_URL}`);
