@@ -143,6 +143,8 @@ async function runBots() {
     launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   }
   const browser = await chromium.launch(launchOptions);
+  let context = null;
+  let page = null;
 
   try {
     // Reload configs dynamically to pick up any manual changes to config.json
@@ -159,14 +161,21 @@ async function runBots() {
       currentConfigs = configs;
     }
 
-    const context = await browser.newContext({
+    context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 720 },
       extraHTTPHeaders: {
         "Accept-Language": "es-CR,es;q=0.9,en;q=0.8",
       },
     });
-    const page = await context.newPage();
+    page = await context.newPage();
+
+    // Bypass basic headless browser detection
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+      });
+    });
 
     // Navigate to target URL
     console.log(`-> Navigating to target URL: ${TARGET_URL}`);
@@ -357,9 +366,21 @@ async function runBots() {
       }
     }
 
-    await page.close();
+    if (page) await page.close();
   } catch (error) {
     console.error("Error during scraping cycle:", error.message);
+    if (page && !page.isClosed()) {
+      try {
+        const screenshotPath = path.join(__dirname, ".wwebjs_auth", "error-screenshot.png");
+        const htmlPath = path.join(__dirname, ".wwebjs_auth", "error-page.html");
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        const html = await page.content();
+        fs.writeFileSync(htmlPath, html);
+        console.log(`Saved debug files: ${screenshotPath} and ${htmlPath}`);
+      } catch (err) {
+        console.error("Failed to capture error page screenshot/content:", err.message);
+      }
+    }
   } finally {
     await browser.close();
     isRunning = false;
