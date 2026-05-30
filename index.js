@@ -6,7 +6,9 @@ const path = require("path");
 const TARGET_URL = process.env.TARGET_URL;
 
 if (!TARGET_URL || TARGET_URL === "https://example.com/jobs") {
-  console.error("Please set the actual TARGET_URL in the .env file or environment.");
+  console.error(
+    "Please set the actual TARGET_URL in the .env file or environment.",
+  );
   process.exit(1);
 }
 
@@ -40,7 +42,9 @@ function checkAndClearCache() {
   const oneDayMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
   if (now - lastClearedTime >= oneDayMs) {
-    console.log(`\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`);
+    console.log(
+      `\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`,
+    );
     notifiedJobs.clear();
     lastClearedTime = now;
     saveCache();
@@ -84,16 +88,22 @@ function escapeHtml(text) {
 async function runBots() {
   checkAndClearCache();
   if (isRunning) {
-    console.log(`\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`);
+    console.log(
+      `\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`,
+    );
     return;
   }
   isRunning = true;
   console.log(`\n[${new Date().toISOString()}] Running job scrape bots...`);
-  
+
   // Launch browser
   const launchOptions = {
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   };
   const browser = await chromium.launch(launchOptions);
   let context = null;
@@ -115,7 +125,8 @@ async function runBots() {
     }
 
     context = await browser.newContext({
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 720 },
       extraHTTPHeaders: {
         "Accept-Language": "es-CR,es;q=0.9,en;q=0.8",
@@ -266,7 +277,7 @@ async function runBots() {
               specialtyText,
               clasePuestoText,
             } = job;
-            
+
             const cleanRegion = regionalText
               .toLowerCase()
               .replace(/[^a-z0-9]/g, "-")
@@ -298,25 +309,35 @@ async function runBots() {
                 `📝 <b>Detalles:</b>\n${escapeHtml(rowText)}\n\n` +
                 `🔗 <b>Enlace:</b> <a href="${escapeHtml(TARGET_URL)}">${escapeHtml(TARGET_URL)}</a>`;
 
-              console.log(`      Sending Telegram message to chat ${telegramChatId}...`);
+              console.log(
+                `      Sending Telegram message to chat ${telegramChatId}...`,
+              );
               try {
-                const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: telegramChatId,
-                    text: htmlMessage,
-                    parse_mode: "HTML",
-                  }),
-                });
+                const response = await fetch(
+                  `https://api.telegram.org/bot${telegramBotToken}/sendMessage`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: telegramChatId,
+                      text: htmlMessage,
+                      parse_mode: "HTML",
+                    }),
+                  },
+                );
 
                 if (!response.ok) {
                   const errText = await response.text();
-                  throw new Error(`Telegram API returned status ${response.status}: ${errText}`);
+                  throw new Error(
+                    `Telegram API returned status ${response.status}: ${errText}`,
+                  );
                 }
                 console.log(`      Telegram message sent successfully.`);
               } catch (sendErr) {
-                console.error(`      Failed to send Telegram message:`, sendErr.message);
+                console.error(
+                  `      Failed to send Telegram message:`,
+                  sendErr.message,
+                );
               }
             }
           }
@@ -343,7 +364,10 @@ async function runBots() {
         fs.writeFileSync(htmlPath, html);
         console.log(`Saved debug files: ${screenshotPath} and ${htmlPath}`);
       } catch (err) {
-        console.error("Failed to capture error page screenshot/content:", err.message);
+        console.error(
+          "Failed to capture error page screenshot/content:",
+          err.message,
+        );
       }
     }
   } finally {
@@ -356,4 +380,4 @@ async function runBots() {
 // Start bot loop
 console.log("Starting Telegram Job Scraper Bot...");
 runBots();
-setInterval(runBots, 5 * 60 * 1000);
+setInterval(runBots, 1 * 60 * 1000);
