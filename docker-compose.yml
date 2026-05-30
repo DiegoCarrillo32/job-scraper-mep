@@ -10,10 +10,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 750M
+          memory: 400M
     volumes:
-      # Map the WhatsApp session so you don't have to scan the QR code on every restart
-      - ./.wwebjs_auth:/app/.wwebjs_auth
       # Map the cache so we don't spam notifications on restart
       - ./cache.json:/app/cache.json
       # Map config so you can change settings without rebuilding the container

@@ -1,14 +1,12 @@
 require("dotenv").config();
 const { chromium } = require("playwright");
-const { Client, LocalAuth } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
 const TARGET_URL = process.env.TARGET_URL;
 
 if (!TARGET_URL || TARGET_URL === "https://example.com/jobs") {
-  console.error("Please set the actual TARGET_URL in the .env file.");
+  console.error("Please set the actual TARGET_URL in the .env file or environment.");
   process.exit(1);
 }
 
@@ -23,59 +21,7 @@ try {
   process.exit(1);
 }
 
-// Clean up leftover Chromium locks (e.g. from Docker restarts/crashes)
-// SingletonLock is a symlink, so we use lstatSync to detect it even if it is broken.
-const lockFiles = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
-for (const file of lockFiles) {
-  const filePath = path.join(__dirname, ".wwebjs_auth", "session", file);
-  try {
-    fs.lstatSync(filePath);
-    fs.unlinkSync(filePath);
-    console.log(`Cleaned up leftover Chromium file: ${file}`);
-  } catch (err) {
-    if (err.code !== "ENOENT") {
-      console.warn(
-        `Could not delete leftover Chromium file ${file}:`,
-        err.message,
-      );
-    }
-  }
-}
-
-// Initialize WhatsApp Client
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  puppeteer: {
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  },
-});
-
-client.on("qr", (qr) => {
-  // Generate and scan this code with your phone
-  console.log("Please scan the QR code below with your WhatsApp app:");
-  qrcode.generate(qr, { small: true });
-});
-
 let isRunning = false;
-
-client.on("ready", () => {
-  console.log("WhatsApp Client is ready!");
-  // Start the scraping loop every 5 minutes (300000 ms)
-  setInterval(runBots, 5 * 60 * 1000);
-  // Run immediately on start
-  runBots();
-});
-
-console.log(
-  "Starting WhatsApp client... This can take 15-30 seconds to restore the session.",
-);
-client.initialize();
 
 // Keep track of notified jobs using a persistent cache file.
 const CACHE_FILE = "./cache.json";
@@ -94,9 +40,7 @@ function checkAndClearCache() {
   const oneDayMs = 24 * 60 * 60 * 1000;
   const now = Date.now();
   if (now - lastClearedTime >= oneDayMs) {
-    console.log(
-      `\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`,
-    );
+    console.log(`\n[${new Date().toISOString()}] 24 hours have passed since last cache clear. Clearing cache...`);
     notifiedJobs.clear();
     lastClearedTime = now;
     saveCache();
@@ -128,17 +72,24 @@ function loadCache() {
 // Initial load
 loadCache();
 
+// Helper to escape special HTML characters for Telegram message parsing
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 async function runBots() {
   checkAndClearCache();
   if (isRunning) {
-    console.log(
-      `\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`,
-    );
+    console.log(`\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`);
     return;
   }
   isRunning = true;
   console.log(`\n[${new Date().toISOString()}] Running job scrape bots...`);
-
+  
   // Launch browser
   const launchOptions = {
     headless: true,
@@ -291,7 +242,8 @@ async function runBots() {
               foundJobs.push({
                 vacanteId,
                 rowText: rowText.trim(),
-                whatsappNumber: config.whatsappNumber,
+                telegramBotToken: config.telegramBotToken,
+                telegramChatId: config.telegramChatId,
                 regionalText,
                 specialtyText,
                 clasePuestoText,
@@ -308,11 +260,13 @@ async function runBots() {
             const {
               vacanteId,
               rowText,
-              whatsappNumber,
+              telegramBotToken,
+              telegramChatId,
               regionalText,
               specialtyText,
               clasePuestoText,
             } = job;
+            
             const cleanRegion = regionalText
               .toLowerCase()
               .replace(/[^a-z0-9]/g, "-")
@@ -335,25 +289,34 @@ async function runBots() {
               notifiedJobs.add(jobId);
               saveCache();
 
-              const message =
-                `🚨 *¡Nueva Vacante Encontrada!*\n\n` +
-                `📍 *Región:* ${regionalText}\n` +
-                `💼 *Clase de Puesto:* ${clasePuestoText || "N/A"}\n` +
-                `🎯 *Especialidad:* ${specialtyText || "N/A"}\n\n` +
-                `📝 *Detalles:*\n${rowText}\n\n` +
-                `🔗 *Enlace:* ${TARGET_URL}`;
+              // Build Telegram message in safe HTML format
+              const htmlMessage =
+                `🚨 <b>¡Nueva Vacante Encontrada!</b>\n\n` +
+                `📍 <b>Región:</b> ${escapeHtml(regionalText)}\n` +
+                `💼 <b>Clase de Puesto:</b> ${escapeHtml(clasePuestoText || "N/A")}\n` +
+                `🎯 <b>Especialidad:</b> ${escapeHtml(specialtyText || "N/A")}\n\n` +
+                `📝 <b>Detalles:</b>\n${escapeHtml(rowText)}\n\n` +
+                `🔗 <b>Enlace:</b> <a href="${escapeHtml(TARGET_URL)}">${escapeHtml(TARGET_URL)}</a>`;
 
-              console.log(
-                `      Sending WhatsApp message to ${whatsappNumber}...`,
-              );
+              console.log(`      Sending Telegram message to chat ${telegramChatId}...`);
               try {
-                await client.sendMessage(whatsappNumber, message);
-                console.log(`      Message sent successfully.`);
+                const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: telegramChatId,
+                    text: htmlMessage,
+                    parse_mode: "HTML",
+                  }),
+                });
+
+                if (!response.ok) {
+                  const errText = await response.text();
+                  throw new Error(`Telegram API returned status ${response.status}: ${errText}`);
+                }
+                console.log(`      Telegram message sent successfully.`);
               } catch (sendErr) {
-                console.error(
-                  `      Failed to send message to ${whatsappNumber}:`,
-                  sendErr.message,
-                );
+                console.error(`      Failed to send Telegram message:`, sendErr.message);
               }
             }
           }
@@ -373,8 +336,8 @@ async function runBots() {
     console.error("Error during scraping cycle:", error.message);
     if (page && !page.isClosed()) {
       try {
-        const screenshotPath = path.join(__dirname, ".wwebjs_auth", "error-screenshot.png");
-        const htmlPath = path.join(__dirname, ".wwebjs_auth", "error-page.html");
+        const screenshotPath = path.join(__dirname, "error-screenshot.png");
+        const htmlPath = path.join(__dirname, "error-page.html");
         await page.screenshot({ path: screenshotPath, fullPage: true });
         const html = await page.content();
         fs.writeFileSync(htmlPath, html);
@@ -389,3 +352,8 @@ async function runBots() {
     console.log(`[${new Date().toISOString()}] Scrape cycle complete.`);
   }
 }
+
+// Start bot loop
+console.log("Starting Telegram Job Scraper Bot...");
+runBots();
+setInterval(runBots, 5 * 60 * 1000);
