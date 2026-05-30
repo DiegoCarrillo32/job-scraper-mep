@@ -6,6 +6,11 @@ services:
     container_name: job-scraper-bot
     # This tells Docker to always restart the bot (e.g. when you turn on your laptop)
     restart: unless-stopped
+    ipc: host
+    deploy:
+      resources:
+        limits:
+          memory: 750M
     volumes:
       # Map the WhatsApp session so you don't have to scan the QR code on every restart
       - ./.wwebjs_auth:/app/.wwebjs_auth
@@ -15,4 +20,3 @@ services:
       - ./config.json:/app/config.json
     environment:
       - TARGET_URL=https://apps.mep.go.cr/formulario?shem=rimspwouoe
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
