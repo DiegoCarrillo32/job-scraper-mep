@@ -1,12 +1,9 @@
 FROM node:20-slim
 
-# Prevent Puppeteer and Playwright from downloading their own browsers during npm install
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
-# Install system Chromium (automatically pulls all required OS libraries)
+# Install basic tools for key management and downloads
 RUN apt-get update && apt-get install -y \
-    chromium \
+    wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,8 +11,11 @@ WORKDIR /app
 # Copy package configurations
 COPY package*.json ./
 
-# Install only production dependencies using clean install
+# Install production dependencies (downloads Puppeteer's Chrome automatically)
 RUN npm ci --only=production
+
+# Install Playwright's Chromium browser and all required system OS dependencies
+RUN npx playwright install --with-deps chromium
 
 # Copy the rest of the application
 COPY . .
