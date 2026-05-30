@@ -135,7 +135,10 @@ async function runBots() {
   console.log(`\n[${new Date().toISOString()}] Running job scrape bots...`);
 
   // Launch browser
-  const launchOptions = { headless: true };
+  const launchOptions = {
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  };
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   }
