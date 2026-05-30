@@ -45,6 +45,7 @@ for (const file of lockFiles) {
 // Initialize WhatsApp Client
 const client = new Client({
   authStrategy: new LocalAuth(),
+  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   puppeteer: {
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     args: [
