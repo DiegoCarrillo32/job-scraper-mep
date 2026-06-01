@@ -243,11 +243,11 @@ async function runBots() {
             const targetClases = config.clasesPuesto || [];
 
             const matchedSpecialty = targetSpecs.find((spec) =>
-              specialtyText.toLowerCase().includes(spec.toLowerCase()),
+              specialtyText.toLowerCase().trim() === spec.toLowerCase().trim(),
             );
 
             const matchedClase = targetClases.find((clase) =>
-              clasePuestoText.toLowerCase().includes(clase.toLowerCase()),
+              clasePuestoText.toLowerCase().trim() === clase.toLowerCase().trim(),
             );
 
             const hasSpecMatch = targetSpecs.length > 0 && matchedSpecialty;
@@ -258,6 +258,23 @@ async function runBots() {
               const vacanteId = vacanteTd
                 ? (await vacanteTd.innerText()).trim()
                 : null;
+
+              const institucionTd = await row.$('td[data-label="Institución"]');
+              const institucionText = institucionTd
+                ? (await institucionTd.innerText()).trim()
+                : "";
+
+              const leccionesTd = await row.$('td[data-label="Lecciones"]');
+              const leccionesText = leccionesTd
+                ? (await leccionesTd.innerText()).trim()
+                : "";
+
+              const rigeTd = await row.$('td[data-label="Rige"]');
+              const rigeText = rigeTd ? (await rigeTd.innerText()).trim() : "";
+
+              const venceTd = await row.$('td[data-label="Vence"]');
+              const venceText = venceTd ? (await venceTd.innerText()).trim() : "";
+
               const rowText = await row.innerText();
 
               foundJobs.push({
@@ -268,6 +285,10 @@ async function runBots() {
                 regionalText,
                 specialtyText,
                 clasePuestoText,
+                institucionText,
+                leccionesText,
+                rigeText,
+                venceText,
               });
             }
           }
@@ -286,6 +307,8 @@ async function runBots() {
               regionalText,
               specialtyText,
               clasePuestoText,
+              institucionText,
+              leccionesText,
             } = job;
 
             const cleanRegion = regionalText
@@ -303,8 +326,20 @@ async function runBots() {
               .replace(/[^a-z0-9]/g, "-")
               .replace(/-+/g, "-")
               .trim();
+            const cleanInstitucion = institucionText
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .trim();
+            const cleanLecciones = leccionesText
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .trim();
             const cleanVacante = (vacanteId || "no_id").trim();
-            const jobId = `vacante-${cleanVacante}-${cleanRegion}-${cleanClase}-${cleanSpecialty}`;
+            
+            // Build a fully unique ID incorporating school, lessons, and chat destination
+            const jobId = `vacante-${cleanVacante}-${cleanRegion}-${cleanClase}-${cleanSpecialty}-${cleanInstitucion}-${cleanLecciones}-${telegramChatId}`;
 
             if (!notifiedJobs.has(jobId)) {
               notifiedJobs.add(jobId);
