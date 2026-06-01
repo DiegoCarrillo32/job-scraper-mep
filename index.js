@@ -86,7 +86,7 @@ function escapeHtml(text) {
 }
 
 async function runBots() {
-  checkAndClearCache();
+  loadCache();
   if (isRunning) {
     console.log(
       `\n[${new Date().toISOString()}] Scrape cycle already in progress, skipping.`,
