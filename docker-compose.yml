@@ -10,7 +10,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 400M
+          memory: 1G
     volumes:
       # Map the cache so we don't spam notifications on restart
       - ./cache.json:/app/cache.json

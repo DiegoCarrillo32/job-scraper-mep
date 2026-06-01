@@ -145,9 +145,15 @@ async function runBots() {
     console.log(`-> Navigating to target URL: ${TARGET_URL}`);
     await page.goto(TARGET_URL, { waitUntil: "domcontentloaded" });
 
-    // Wait for Blazor WebSocket to initialize
-    console.log("   Waiting 5 seconds for Blazor to initialize...");
-    await page.waitForTimeout(5000);
+    // Wait for Blazor WebSocket to initialize and render the regional select dropdown
+    console.log("   Waiting for regional select element to be visible...");
+    await page.waitForSelector("#regionalSelect", { state: "visible", timeout: 15000 });
+
+    // Wait until the select has loaded real options (more than just the placeholder)
+    await page.waitForFunction(() => {
+      const select = document.querySelector("#regionalSelect");
+      return select && select.options.length > 1;
+    }, { timeout: 15000 });
 
     // Extract all valid region options from the dropdown
     const regions = await page.evaluate(() => {
@@ -157,6 +163,10 @@ async function runBots() {
         .map((opt) => ({ value: opt.value, text: opt.innerText.trim() }))
         .filter((opt) => opt.value !== ""); // Exclude placeholder option
     });
+
+    if (regions.length === 0) {
+      throw new Error("No regional options found in the select dropdown. The page may have failed to load or initialize correctly.");
+    }
 
     console.log(
       `   Found ${regions.length} region(s) in dropdown:`,
@@ -323,6 +333,7 @@ async function runBots() {
                       text: htmlMessage,
                       parse_mode: "HTML",
                     }),
+                    signal: AbortSignal.timeout(10000), // Timeout after 10 seconds
                   },
                 );
 

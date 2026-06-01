@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clear-cache": "node -e \"const fs = require('fs'); fs.writeFileSync('./cache.json', JSON.stringify({ lastCleared: Date.now(), jobs: [] }, null, 2)); console.log('Cache cleared successfully!');\""
   },
   "keywords": [],
   "author": "",
