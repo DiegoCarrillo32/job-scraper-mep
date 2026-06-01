@@ -24,6 +24,7 @@ try {
 }
 
 let isRunning = false;
+const startTime = Date.now();
 
 // Keep track of notified jobs using a persistent cache file.
 const CACHE_FILE = "./cache.json";
@@ -477,6 +478,16 @@ async function runBots() {
     await browser.close();
     isRunning = false;
     console.log(`[${new Date().toISOString()}] Scrape cycle complete.`);
+
+    // Check if the bot has been running for more than an hour
+    const uptimeMs = Date.now() - startTime;
+    const oneHourMs = 60 * 60 * 1000;
+    if (uptimeMs >= oneHourMs) {
+      console.log(
+        `\n[${new Date().toISOString()}] Bot has been running for 1 hour. Exiting process for auto-restart...`,
+      );
+      process.exit(0);
+    }
   }
 }
 
