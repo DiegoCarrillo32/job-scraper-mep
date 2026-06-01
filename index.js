@@ -173,28 +173,85 @@ async function runBots() {
       regions.map((r) => r.text).join(", "),
     );
 
+    // Verify Blazor is fully interactive by selecting the first region and waiting for the empty row text to change
+    console.log("   Verifying Blazor interactivity by selecting the first region...");
+    const firstRegion = regions[0];
+    let isInteractive = false;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`   [Attempt ${attempt}] Selecting region "${firstRegion.text}"...`);
+      await page.selectOption("#regionalSelect", firstRegion.value);
+
+      try {
+        await page.waitForFunction(
+          () => {
+            const emptyRow = document.querySelector(".mud-table-empty-row");
+            if (!emptyRow) return true;
+            return !emptyRow.innerText.includes("Seleccione una Dirección Regional");
+          },
+          { timeout: 8000 }
+        );
+        isInteractive = true;
+        console.log("   Blazor connection is live and interactive!");
+        break;
+      } catch (err) {
+        console.log("   Table did not update, Blazor connection might not be ready yet. Retrying...");
+        await page.waitForTimeout(2000);
+      }
+    }
+
+    if (!isInteractive) {
+      throw new Error("Blazor failed to become interactive after multiple attempts.");
+    }
+
     for (const region of regions) {
       console.log(
         `\n   -> Processing Region: "${region.text}" (ID: ${region.value})`,
       );
 
       try {
+        // Capture old table HTML to detect change
+        const oldTableHtml = await page.evaluate(() => {
+          const container = document.querySelector(".mud-table-container");
+          return container ? container.innerHTML : "";
+        });
+
         // Select option
         await page.selectOption("#regionalSelect", region.value);
 
-        // Wait a moment for table to begin update
-        await page.waitForTimeout(1500);
-
-        // Wait for empty row to disappear (signaling table populated)
+        // Wait for table to update to the selected region
         try {
           await page.waitForFunction(
-            () => !document.querySelector(".mud-table-empty-row"),
-            { timeout: 6000 },
+            ({ oldHtml, targetText }) => {
+              const container = document.querySelector(".mud-table-container");
+              const currentHtml = container ? container.innerHTML : "";
+
+              // 1. If HTML changed and it shows empty row, it's updated (0 jobs)
+              if (currentHtml !== oldHtml && document.querySelector(".mud-table-empty-row")) {
+                return true;
+              }
+
+              // 2. Check if there are rows matching the selected region
+              const rows = Array.from(document.querySelectorAll("tr"));
+              for (const row of rows) {
+                const regionalTd = row.querySelector('td[data-label="Dirección Regional"]');
+                if (regionalTd) {
+                  const tdText = regionalTd.innerText.toLowerCase().replace(/[^a-z0-9]/g, "");
+                  const cleanTarget = targetText.toLowerCase().replace(/[^a-z0-9]/g, "");
+                  if (tdText.includes(cleanTarget) || cleanTarget.includes(tdText)) {
+                    return true;
+                  }
+                }
+              }
+
+              return false;
+            },
+            { oldHtml: oldTableHtml, targetText: region.text },
+            { timeout: 10000 }
           );
         } catch (e) {
-          console.log(
-            `      [Info] Waiting for empty row to disappear timed out. Proceeding...`,
-          );
+          // Fallback: wait a short fixed time if it timed out (e.g. empty-to-empty transition)
+          await page.waitForTimeout(1500);
         }
 
         // Look for rows that match our criteria
